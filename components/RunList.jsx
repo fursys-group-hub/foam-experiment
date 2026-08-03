@@ -1,6 +1,5 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
 
 export default function RunList({ runs, factors, molds, boilers, onRefresh, onOpenLot }) {
   const [showCreate, setShowCreate] = useState(false);
@@ -18,18 +17,18 @@ export default function RunList({ runs, factors, molds, boilers, onRefresh, onOp
 
   async function loadExtra() {
     if (!runs.length) return;
-    const [specRes, fixRes] = await Promise.all([
-      supabase.from('exp_specimens').select('run_id'),
-      supabase.from('exp_run_fixed_factors').select('*'),
+    const [specRows, fixRows] = await Promise.all([
+      fetch('/api/specimens').then(r => r.json()),
+      fetch('/api/run-fixed-factors').then(r => r.json()),
     ]);
-    if (specRes.data) {
+    if (Array.isArray(specRows)) {
       const counts = {};
-      specRes.data.forEach(s => { counts[s.run_id] = (counts[s.run_id] || 0) + 1; });
+      specRows.forEach(s => { counts[s.run_id] = (counts[s.run_id] || 0) + 1; });
       setSpecimenCounts(counts);
     }
-    if (fixRes.data) {
+    if (Array.isArray(fixRows)) {
       const map = {};
-      fixRes.data.forEach(ff => {
+      fixRows.forEach(ff => {
         if (!map[ff.run_id]) map[ff.run_id] = [];
         map[ff.run_id].push(ff);
       });
@@ -54,34 +53,30 @@ export default function RunList({ runs, factors, molds, boilers, onRefresh, onOp
     const boiler = boilers.find(b => b.id === mold?.boiler_id);
     const activeFactor = activeFactors.find(f => f.id === Number(form.active_factor_id));
 
-    const { data: run, error } = await supabase.from('exp_runs').insert({
-      phase: form.phase,
-      mold_id: mold.id,
-      mold_name: mold.mold_id,
-      boiler_id: boiler?.id || null,
-      boiler_no: boiler?.boiler_no || null,
-      ref_weight: mold.ref_weight,
-      is_control: form.is_control,
-      active_factor_id: form.is_control ? null : activeFactor?.id,
-      active_factor_name: form.is_control ? null : activeFactor?.name,
-      active_factor_value: form.is_control ? null : form.active_factor_value,
-      memo: form.memo,
-    }).select().single();
+    const fixedRows = form.is_control ? [] : activeFactors
+      .filter(f => f.id !== Number(form.active_factor_id))
+      .map(f => ({ factor_id: f.id, factor_name: f.name, fixed_value: form.fixedValues[f.id] || '' }))
+      .filter(r => r.fixed_value);
 
-    if (error) return alert('생성 실패: ' + error.message);
-
-    if (!form.is_control) {
-      const fixedRows = activeFactors
-        .filter(f => f.id !== Number(form.active_factor_id))
-        .map(f => ({
-          run_id: run.id, factor_id: f.id, factor_name: f.name,
-          fixed_value: form.fixedValues[f.id] || '',
-        }))
-        .filter(r => r.fixed_value);
-      if (fixedRows.length) {
-        await supabase.from('exp_run_fixed_factors').insert(fixedRows);
-      }
-    }
+    const res = await fetch('/api/runs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phase: form.phase,
+        mold_id: mold.id,
+        mold_name: mold.mold_id,
+        boiler_id: boiler?.id || null,
+        boiler_no: boiler?.boiler_no || null,
+        ref_weight: mold.ref_weight,
+        is_control: form.is_control,
+        active_factor_id: form.is_control ? null : activeFactor?.id,
+        active_factor_name: form.is_control ? null : activeFactor?.name,
+        active_factor_value: form.is_control ? null : form.active_factor_value,
+        memo: form.memo,
+        fixedRows,
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok) return alert('생성 실패: ' + (data.error || ''));
 
     setShowCreate(false);
     setForm({
@@ -94,9 +89,7 @@ export default function RunList({ runs, factors, molds, boilers, onRefresh, onOp
   async function deleteRun(runId, e) {
     e.stopPropagation();
     if (!confirm('이 실험 Run과 모든 시편 데이터를 삭제하시겠습니까?')) return;
-    await supabase.from('exp_specimens').delete().eq('run_id', runId);
-    await supabase.from('exp_run_fixed_factors').delete().eq('run_id', runId);
-    await supabase.from('exp_runs').delete().eq('id', runId);
+    await fetch(`/api/runs?id=${runId}`, { method: 'DELETE' });
     onRefresh();
   }
 
