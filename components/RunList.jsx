@@ -58,25 +58,38 @@ export default function RunList({ runs, factors, molds, boilers, onRefresh, onOp
       .map(f => ({ factor_id: f.id, factor_name: f.name, fixed_value: form.fixedValues[f.id] || '' }))
       .filter(r => r.fixed_value);
 
-    const res = await fetch('/api/runs', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        phase: form.phase,
-        mold_id: mold.id,
-        mold_name: mold.mold_id,
-        boiler_id: boiler?.id || null,
-        boiler_no: boiler?.boiler_no || null,
-        ref_weight: mold.ref_weight,
-        is_control: form.is_control,
-        active_factor_id: form.is_control ? null : activeFactor?.id,
-        active_factor_name: form.is_control ? null : activeFactor?.name,
-        active_factor_value: form.is_control ? null : form.active_factor_value,
-        memo: form.memo,
-        fixedRows,
-      }),
-    });
-    const data = await res.json();
-    if (!data.ok) return alert('생성 실패: ' + (data.error || ''));
+    let res;
+    try {
+      res = await fetch('/api/runs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phase: form.phase,
+          mold_id: mold.id,
+          mold_name: mold.mold_id,
+          boiler_id: boiler?.id || null,
+          boiler_no: boiler?.boiler_no || null,
+          ref_weight: mold.ref_weight,
+          is_control: form.is_control,
+          active_factor_id: form.is_control ? null : activeFactor?.id,
+          active_factor_name: form.is_control ? null : activeFactor?.name,
+          active_factor_value: form.is_control ? null : form.active_factor_value,
+          memo: form.memo,
+          fixedRows,
+        }),
+      });
+    } catch (err) {
+      return alert('생성 요청 실패 (네트워크): ' + err.message);
+    }
+
+    // 응답이 JSON이 아닐 수 있음(인증 게이트웨이 HTML, 502 등) → 조용히 죽지 않도록 방어
+    const raw = await res.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return alert(`생성 실패 (HTTP ${res.status}): 서버가 JSON이 아닌 응답을 반환했습니다.\n${raw.slice(0, 200)}`);
+    }
+    if (!res.ok || !data.ok) return alert('생성 실패: ' + (data.error || `HTTP ${res.status}`));
 
     setShowCreate(false);
     setForm({
