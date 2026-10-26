@@ -40,7 +40,7 @@ export default function Analysis({ runs: allRuns, factors, molds, boilers, mold 
     setLoading(false);
   }
 
-  // 금형 필터: 아래 모든 화면(히스토리~분석코멘트, 조건비교)은 선택한 금형의 Run·시편·사진만 쓴다
+  // 금형 필터: 아래 모든 화면(히스토리~사진)은 선택한 금형의 Run·시편·사진만 쓴다
   const moldKey = r => (r.mold_name || '').trim() || '(금형 없음)';
   const moldCounts = {};
   allRuns.forEach(r => { moldCounts[moldKey(r)] = (moldCounts[moldKey(r)] || 0) + 1; });
@@ -62,82 +62,7 @@ export default function Analysis({ runs: allRuns, factors, molds, boilers, mold 
   function gfs(run){return gs(run.id).reduce((a,s)=>a+specFillSum(s),0);}
   function gsc(run){return gs(run.id).filter(s=>specHasSurface(s)).length;}
 
-  function generateAnalysis() {
-    if(runs.length<2) return ['실험 Run이 2개 이상 있어야 비교 분석이 가능합니다.'];
-    const insights = [];
-    const byFactor = {};
-    runs.forEach(run => {
-      if(!run.active_factor_name) return;
-      if(!byFactor[run.active_factor_name]) byFactor[run.active_factor_name] = [];
-      byFactor[run.active_factor_name].push({
-        value: run.active_factor_value,
-        defectRate: gdr(run),
-        fillSum: gfs(run),
-        surfCount: gsc(run),
-        specCount: gs(run.id).length,
-        tempUp: run.temp_upper,
-        tempLo: run.temp_lower,
-        memo: run.memo,
-      });
-    });
-
-    Object.entries(byFactor).forEach(([factorName, entries]) => {
-      if(entries.length < 2) return;
-      const sorted = [...entries].sort((a,b) => a.defectRate - b.defectRate);
-      const best = sorted[0];
-      const worst = sorted[sorted.length - 1];
-      if(best.defectRate !== worst.defectRate) {
-        insights.push(`📊 ${factorName} 변경 효과: ${worst.value} → ${best.value}로 변경 시 불량률 ${worst.defectRate}% → ${best.defectRate}%로 ${worst.defectRate - best.defectRate}%p 개선`);
-      }
-      if(best.fillSum !== worst.fillSum) {
-        insights.push(`🔍 ${factorName} ${best.value}일 때 미충진 심각도 총합이 가장 낮음 (${best.fillSum}) vs ${worst.value}일 때 ${worst.fillSum}`);
-      }
-      const surfEntries = entries.filter(e => e.surfCount > 0);
-      if(surfEntries.length > 0) {
-        const surfWorst = surfEntries.sort((a,b) => b.surfCount - a.surfCount)[0];
-        insights.push(`🔵 ${factorName} ${surfWorst.value}에서 표면불량 ${surfWorst.surfCount}건 발생`);
-      }
-    });
-
-    const zoneFillSums = new Array(9).fill(0);
-    const zoneSurfCounts = new Array(9).fill(0);
-    allSpecs.forEach(s => {
-      Object.entries(s.defect_severity || {}).forEach(([z,v]) => {
-        const d = pz(v);
-        zoneFillSums[Number(z)] += d.fill;
-        if(d.surface > 0) zoneSurfCounts[Number(z)]++;
-      });
-    });
-    const totalFill = zoneFillSums.reduce((a,b) => a+b, 0);
-    if(totalFill > 0) {
-      const topZones = zoneFillSums.map((v,i) => ({zone: ZONE_LABELS[i], sum: v}))
-        .filter(z => z.sum > 0).sort((a,b) => b.sum - a.sum).slice(0, 3);
-      insights.push(`📍 미충진 집중 구역: ${topZones.map(z => `${z.zone}(${z.sum})`).join(', ')} — 금형 해당 부위 점검 필요`);
-    }
-    const totalSurf = zoneSurfCounts.reduce((a,b) => a+b, 0);
-    if(totalSurf > 0) {
-      const topSurf = zoneSurfCounts.map((v,i) => ({zone: ZONE_LABELS[i], count: v}))
-        .filter(z => z.count > 0).sort((a,b) => b.count - a.count).slice(0, 3);
-      insights.push(`🔵 표면불량 집중 구역: ${topSurf.map(z => `${z.zone}(${z.count}건)`).join(', ')}`);
-    }
-
-    const tempRuns = runs.filter(r => r.temp_upper);
-    if(tempRuns.length >= 2) {
-      const sortedByTemp = [...tempRuns].sort((a,b) => a.temp_upper - b.temp_upper);
-      const lowTemp = sortedByTemp[0];
-      const highTemp = sortedByTemp[sortedByTemp.length - 1];
-      const lowRate = gdr(lowTemp);
-      const highRate = gdr(highTemp);
-      if(lowRate !== highRate) {
-        insights.push(`🌡 금형온도(상) ${lowTemp.temp_upper}℃(불량${lowRate}%) vs ${highTemp.temp_upper}℃(불량${highRate}%) — ${lowRate < highRate ? '낮은 온도' : '높은 온도'}에서 불량률 낮음`);
-      }
-    }
-
-    if(insights.length === 0) insights.push('현재 데이터로는 유의미한 차이가 관찰되지 않습니다. 실험 데이터가 더 쌓이면 분석이 구체화됩니다.');
-    return insights;
-  }
-
-  const views = [{id:'history',label:'히스토리'},{id:'scatter',label:'산포도'},{id:'zone',label:'구역분석'},{id:'factor',label:'인자비교'},{id:'compare',label:'조건비교'},{id:'photos',label:'사진'},{id:'ai',label:'분석코멘트'}];
+  const views = [{id:'history',label:'히스토리'},{id:'scatter',label:'산포도'},{id:'zone',label:'구역분석'},{id:'factor',label:'인자비교'},{id:'compare',label:'조건비교'},{id:'photos',label:'사진'}];
 
   if(loading) return <div className="text-center py-12 text-gray-400 text-sm">로딩중...</div>;
 
@@ -279,26 +204,6 @@ export default function Analysis({ runs: allRuns, factors, molds, boilers, mold 
             </div>
           </div>);}).filter(Boolean)}
         {allPhotos.length===0&&<div className="text-center py-12 text-gray-400 text-sm">등록된 사진이 없습니다</div>}
-      </div>)}
-
-      {/* 자동 분석 코멘트 */}
-      {view==='ai'&&(<div className="space-y-4">
-        <div className="card">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">🤖</span>
-            <h3 className="text-sm font-semibold text-gray-700">데이터 기반 분석</h3>
-          </div>
-          <div className="space-y-2">
-            {generateAnalysis().map((insight, i) => (
-              <div key={i} className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 leading-relaxed">
-                {insight}
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 text-[10px] text-gray-400">
-            실험 데이터가 쌓일수록 분석이 정밀해집니다. 동일 변수에 대해 2개 이상의 Run이 있어야 비교 분석이 가능합니다.
-          </div>
-        </div>
       </div>)}
     </div>
   );
