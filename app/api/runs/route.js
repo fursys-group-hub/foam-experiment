@@ -10,8 +10,8 @@ export async function POST(req) {
       const { rows } = await c.query(
         `INSERT INTO exp_runs
           (phase, mold_id, mold_name, boiler_id, boiler_no, ref_weight, is_control,
-           active_factor_id, active_factor_name, active_factor_value, memo)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+           active_factor_id, active_factor_name, active_factor_value, memo, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, NOW()) RETURNING *`,
         [
           b.phase, b.mold_id, b.mold_name, b.boiler_id ?? null, b.boiler_no ?? null,
           b.ref_weight ?? null, b.is_control ?? false,
