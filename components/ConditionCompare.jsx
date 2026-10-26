@@ -6,8 +6,12 @@ const TONE = {
   strong: 'bg-purple-50 text-purple-900', cond: 'bg-purple-50 text-purple-900', inter: 'bg-blue-50 text-blue-900',
   best: 'bg-green-50 text-green-900', rec: 'bg-green-50 text-green-900',
   weak: 'bg-gray-50 text-gray-700', warn: 'bg-amber-50 text-amber-900', info: 'bg-gray-50 text-gray-500',
+  base_good: 'bg-blue-50 text-blue-900', base_same: 'bg-gray-50 text-gray-700', base_bad: 'bg-red-50 text-red-900',
 };
-const ICON = { strong: '📊', cond: '🔎', inter: '🔁', best: '🏆', rec: '✅', weak: '➖', warn: '⚠️', info: 'ℹ️' };
+const ICON = {
+  strong: '📊', cond: '🔎', inter: '🔁', best: '🏆', rec: '✅', weak: '➖', warn: '⚠️', info: 'ℹ️',
+  base_good: '📏', base_same: '📏', base_bad: '📏',
+};
 
 // 같은 금형의 Run 들을 조건(실험변수 + 고정변수) 조합별로 비교하는 화면
 export default function ConditionCompare({ runs, fixedMap, specsOf, mold }) {
@@ -59,7 +63,14 @@ export default function ConditionCompare({ runs, fixedMap, specsOf, mold }) {
     const t = hi > lo ? (r.avgFill - lo) / (hi - lo) : 0;
     return { background: `rgba(220,38,38,${(0.08 + t * 0.62).toFixed(2)})`, color: t > 0.55 ? '#fff' : '#7f1d1d' };
   };
-  const maxMean = Math.max(1, ...c.effects.flatMap(e => e.levels.map(l => l.mean || 0)));
+  const base = c.baseline;
+  const maxMean = Math.max(1, base ? base.avgFill : 0, ...c.effects.flatMap(e => e.levels.map(l => l.mean || 0)));
+  // 순위표에 기준 대조군을 평균 미충진 순서 자리에 끼워 넣는다 (위에 있는 조건 = 대조군보다 좋음)
+  const rankRows = [...c.ranked];
+  if (base) {
+    const at = rankRows.findIndex(r => r.avgFill >= base.avgFill);
+    rankRows.splice(at < 0 ? rankRows.length : at, 0, { key: 'baseline', baseline: true });
+  }
 
   return (
     <div className="space-y-4">
@@ -82,7 +93,13 @@ export default function ConditionCompare({ runs, fixedMap, specsOf, mold }) {
       </div>
 
       <div className="card">
-        <h3 className="text-xs text-gray-500 mb-3">변수별 효과 (평균 미충진 · 낮을수록 좋음)</h3>
+        <h3 className={`text-xs text-gray-500 ${base ? 'mb-1' : 'mb-3'}`}>변수별 효과 (평균 미충진 · 낮을수록 좋음)</h3>
+        {base && (
+          <p className="text-[10px] text-gray-400 mb-3">
+            <span className="inline-block w-0.5 h-3 bg-blue-600 align-middle mr-1" />
+            파란 선 = 대조군 #{base.runId} 평균 {fmt(base.avgFill)}
+          </p>
+        )}
         <div className="space-y-4">
           {c.effects.map(e => {
             const unit = e.levels.length === 2 ? '쌍' : '묶음';
@@ -99,13 +116,17 @@ export default function ConditionCompare({ runs, fixedMap, specsOf, mold }) {
                   {e.levels.map(l => (
                     <div key={l.level} className="flex items-center gap-2 text-xs">
                       <span className="w-14 shrink-0 text-gray-600 truncate">{l.level}</span>
-                      <div className="flex-1 bg-gray-100 rounded h-4 overflow-hidden">
+                      <div className="relative flex-1 bg-gray-100 rounded h-4 overflow-hidden">
                         {l.mean != null && (
                           <div className="h-4 rounded" style={{
                             width: `${Math.max(4, (l.mean / maxMean) * 100)}%`,
                             // 차이가 작은 조건은 어느 수준도 강조하지 않는다
                             background: e.effect < 1 ? '#cbd5e1' : e.best.includes(l.level) ? '#34d399' : '#fca5a5',
                           }} />
+                        )}
+                        {base && (
+                          <div className="absolute top-0 bottom-0 w-0.5 bg-blue-600"
+                            style={{ left: `calc(${(base.avgFill / maxMean) * 100}% - 1px)` }} />
                         )}
                       </div>
                       <span className="w-8 text-right tabular-nums text-gray-700">{l.mean != null ? fmt(l.mean) : '-'}</span>
@@ -169,7 +190,17 @@ export default function ConditionCompare({ runs, fixedMap, specsOf, mold }) {
               </tr>
             </thead>
             <tbody>
-              {c.ranked.map(r => (
+              {rankRows.map(r => r.baseline ? (
+                <tr key={r.key} className="border-b border-gray-50 bg-blue-50 text-blue-900">
+                  <td className="py-1.5 pr-2 font-semibold whitespace-nowrap">기준</td>
+                  <td className="py-1.5 pr-2" colSpan={c.factors.length}>
+                    대조군 #{base.runId}{base.date && ` · ${base.date}`}
+                  </td>
+                  <td className="py-1.5 text-right tabular-nums font-medium">{fmt(base.avgFill)}</td>
+                  <td className="py-1.5 text-right tabular-nums">{base.avgSurf ? `${Math.round(base.avgSurf * 100)}%` : '-'}</td>
+                  <td className="py-1.5 text-right tabular-nums">{base.n}</td>
+                </tr>
+              ) : (
                 <tr key={r.key} className={`border-b border-gray-50 ${r.rank === 1 ? 'bg-green-50' : ''}`}>
                   <td className="py-1.5 pr-2 font-semibold whitespace-nowrap">{r.rank === 1 ? '🏆 1' : r.rank}</td>
                   {c.factors.map(f => <td key={f} className="py-1.5 pr-2">{r.cond[f]}</td>)}
