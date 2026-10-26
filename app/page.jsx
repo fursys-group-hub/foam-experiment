@@ -17,6 +17,7 @@ const TABS = [
 export default function Home() {
   const [tab, setTab] = useState('runs');
   const [selectedRunId, setSelectedRunId] = useState(null);
+  const [runPage, setRunPage] = useState(1); // 실험목록 쪽 번호 (탭을 오가도 유지)
 
   const [factors, setFactors] = useState([]);
   const [molds, setMolds] = useState([]);
@@ -56,6 +57,7 @@ export default function Home() {
           <RunList
             runs={runs} factors={factors} molds={molds} boilers={boilers}
             onRefresh={loadAll} onOpenLot={openLot}
+            page={runPage} onPageChange={setRunPage}
           />
         )}
         {tab === 'lot' && (

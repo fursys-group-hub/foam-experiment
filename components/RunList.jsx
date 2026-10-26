@@ -1,7 +1,23 @@
 'use client';
 import { useState, useEffect } from 'react';
 
-export default function RunList({ runs, factors, molds, boilers, onRefresh, onOpenLot }) {
+const PAGE_SIZE = 10;
+
+// 하단 페이지 번호: 7쪽 이하면 전부, 그보다 많으면 1 … 현재±1 … 마지막
+function pageList(page, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const nums = [...new Set([1, total, page - 1, page, page + 1])]
+    .filter(n => n >= 1 && n <= total)
+    .sort((a, b) => a - b);
+  const out = [];
+  nums.forEach((n, i) => {
+    if (i > 0 && n - nums[i - 1] > 1) out.push('…');
+    out.push(n);
+  });
+  return out;
+}
+
+export default function RunList({ runs, factors, molds, boilers, onRefresh, onOpenLot, page = 1, onPageChange = () => {} }) {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
     phase: '1차', mold_id: '', is_control: false,
@@ -12,6 +28,16 @@ export default function RunList({ runs, factors, molds, boilers, onRefresh, onOp
 
   const activeFactors = factors.filter(f => f.is_active);
   const activeMolds = molds.filter(m => m.is_active);
+
+  // runs 는 서버에서 최신순(id 내림차순)으로 온다 → 1쪽이 가장 최근 실험
+  const totalPages = Math.max(1, Math.ceil(runs.length / PAGE_SIZE));
+  const curPage = Math.min(Math.max(1, page), totalPages); // 삭제로 쪽 수가 줄어도 범위를 벗어나지 않게
+  const pageRuns = runs.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
+
+  function goPage(n) {
+    onPageChange(Math.min(Math.max(1, n), totalPages));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   useEffect(() => { loadExtra(); }, [runs]);
 
@@ -96,6 +122,7 @@ export default function RunList({ runs, factors, molds, boilers, onRefresh, onOp
       phase: '1차', mold_id: '', is_control: false,
       active_factor_id: '', active_factor_value: '', memo: '', fixedValues: {},
     });
+    onPageChange(1); // 새 Run 이 맨 위(1쪽)에 보이도록
     onRefresh();
   }
 
@@ -205,7 +232,7 @@ export default function RunList({ runs, factors, molds, boilers, onRefresh, onOp
         </div>
       ) : (
         <div className="space-y-3">
-          {runs.map(run => {
+          {pageRuns.map(run => {
             const count = specimenCounts[run.id] || 0;
             const fixed = fixedFactorsMap[run.id] || [];
             return (
@@ -242,6 +269,26 @@ export default function RunList({ runs, factors, molds, boilers, onRefresh, onOp
               </div>
             );
           })}
+
+          {totalPages > 1 && (
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center justify-center gap-1 flex-wrap">
+                <button onClick={() => goPage(curPage - 1)} disabled={curPage === 1}
+                  className="btn btn-sm btn-outline disabled:opacity-40">‹ 이전</button>
+                {pageList(curPage, totalPages).map((n, i) => n === '…' ? (
+                  <span key={`gap-${i}`} className="px-1 text-xs text-gray-400">…</span>
+                ) : (
+                  <button key={n} onClick={() => goPage(n)}
+                    className={`btn btn-sm ${n === curPage ? 'btn-primary' : 'btn-outline'}`}>{n}</button>
+                ))}
+                <button onClick={() => goPage(curPage + 1)} disabled={curPage === totalPages}
+                  className="btn btn-sm btn-outline disabled:opacity-40">다음 ›</button>
+              </div>
+              <div className="text-center text-xs text-gray-400">
+                {(curPage - 1) * PAGE_SIZE + 1}–{Math.min(curPage * PAGE_SIZE, runs.length)} / 총 {runs.length}개
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -8,7 +8,8 @@ export async function GET() {
       q('SELECT * FROM exp_factors ORDER BY sort_order'),
       q('SELECT * FROM exp_molds ORDER BY mold_id'),
       q('SELECT * FROM exp_boilers ORDER BY boiler_no'),
-      q('SELECT * FROM exp_runs ORDER BY created_at DESC'),
+      // 최신순 = id 내림차순. created_at 이 NULL 인 Run 이 DESC 정렬에서 맨 위로 올라오는 문제를 피한다.
+      q('SELECT * FROM exp_runs ORDER BY id DESC'),
     ]);
     return NextResponse.json({
       factors: factors.rows,
