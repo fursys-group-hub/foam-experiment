@@ -18,6 +18,7 @@ export default function Home() {
   const [tab, setTab] = useState('runs');
   const [selectedRunId, setSelectedRunId] = useState(null);
   const [runPage, setRunPage] = useState(1); // 실험목록 쪽 번호 (탭을 오가도 유지)
+  const [analysisMold, setAnalysisMold] = useState('all'); // 분석 탭 금형 필터 (탭을 오가도 유지)
 
   const [factors, setFactors] = useState([]);
   const [molds, setMolds] = useState([]);
@@ -67,7 +68,8 @@ export default function Home() {
           />
         )}
         {tab === 'analysis' && (
-          <Analysis runs={runs} factors={factors} molds={molds} boilers={boilers} />
+          <Analysis runs={runs} factors={factors} molds={molds} boilers={boilers}
+            mold={analysisMold} onMoldChange={setAnalysisMold} />
         )}
       </main>
 

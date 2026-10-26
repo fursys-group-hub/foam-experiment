@@ -5,6 +5,7 @@ import {
   LineElement, Title, Tooltip, Legend, Filler
 } from 'chart.js';
 import { Bar, Scatter } from 'react-chartjs-2';
+import ConditionCompare from '@/components/ConditionCompare';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -16,15 +17,15 @@ function specHasDefect(s){return Object.values(s.defect_severity||{}).some(v=>{c
 function specFillSum(s){return Object.values(s.defect_severity||{}).reduce((a,v)=>a+pz(v).fill,0);}
 function specHasSurface(s){return Object.values(s.defect_severity||{}).some(v=>pz(v).surface>0);}
 
-export default function Analysis({ runs, factors, molds, boilers }) {
-  const [allSpecs, setAllSpecs] = useState([]);
+export default function Analysis({ runs: allRuns, factors, molds, boilers, mold = 'all', onMoldChange = () => {} }) {
+  const [specRows, setSpecRows] = useState([]);
   const [fixedMap, setFixedMap] = useState({});
-  const [allPhotos, setAllPhotos] = useState([]);
-  const [view, setView] = useState('history');
+  const [photoRows, setPhotoRows] = useState([]);
+  const [view, setView] = useState(mold !== 'all' ? 'compare' : 'history'); // 금형을 골라둔 상태면 조건 비교부터
   const [loading, setLoading] = useState(true);
   const [zoneRunId, setZoneRunId] = useState('all');
 
-  useEffect(() => { loadAll(); }, [runs]);
+  useEffect(() => { loadAll(); }, [allRuns]);
 
   async function loadAll() {
     setLoading(true);
@@ -33,10 +34,27 @@ export default function Analysis({ runs, factors, molds, boilers }) {
       fetch('/api/run-fixed-factors').then(r=>r.json()),
       fetch('/api/run-photos').then(r=>r.json()),
     ]);
-    if(Array.isArray(sp)) setAllSpecs(sp);
+    if(Array.isArray(sp)) setSpecRows(sp);
     if(Array.isArray(fx)){const m={};fx.forEach(f=>{if(!m[f.run_id])m[f.run_id]=[];m[f.run_id].push(f);});setFixedMap(m);}
-    if(Array.isArray(ph)) setAllPhotos(ph);
+    if(Array.isArray(ph)) setPhotoRows(ph);
     setLoading(false);
+  }
+
+  // 금형 필터: 아래 모든 화면(히스토리~분석코멘트, 조건비교)은 선택한 금형의 Run·시편·사진만 쓴다
+  const moldKey = r => (r.mold_name || '').trim() || '(금형 없음)';
+  const moldCounts = {};
+  allRuns.forEach(r => { moldCounts[moldKey(r)] = (moldCounts[moldKey(r)] || 0) + 1; });
+  const moldOptions = Object.entries(moldCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'));
+  const moldSel = mold !== 'all' && moldCounts[mold] ? mold : 'all';
+  const runs = moldSel === 'all' ? allRuns : allRuns.filter(r => moldKey(r) === moldSel);
+  const runIds = new Set(runs.map(r => r.id));
+  const allSpecs = specRows.filter(s => runIds.has(s.run_id));
+  const allPhotos = photoRows.filter(p => runIds.has(p.run_id));
+
+  function changeMold(m) {
+    onMoldChange(m);
+    setZoneRunId('all');
+    if (m !== 'all') setView('compare'); // 금형을 고르면 조건 비교 결과부터 보여준다
   }
 
   function gs(rid){return allSpecs.filter(s=>s.run_id===rid);}
@@ -119,7 +137,7 @@ export default function Analysis({ runs, factors, molds, boilers }) {
     return insights;
   }
 
-  const views = [{id:'history',label:'히스토리'},{id:'scatter',label:'산포도'},{id:'zone',label:'구역분석'},{id:'factor',label:'인자비교'},{id:'photos',label:'사진'},{id:'ai',label:'분석코멘트'}];
+  const views = [{id:'history',label:'히스토리'},{id:'scatter',label:'산포도'},{id:'zone',label:'구역분석'},{id:'factor',label:'인자비교'},{id:'compare',label:'조건비교'},{id:'photos',label:'사진'},{id:'ai',label:'분석코멘트'}];
 
   if(loading) return <div className="text-center py-12 text-gray-400 text-sm">로딩중...</div>;
 
@@ -128,6 +146,15 @@ export default function Analysis({ runs, factors, molds, boilers }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-500 shrink-0">금형</span>
+        <select value={moldSel} onChange={e => changeMold(e.target.value)}
+          className="flex-1 border rounded-lg px-3 py-2 text-sm bg-white">
+          <option value="all">전체 ({allRuns.length})</option>
+          {moldOptions.map(([m, n]) => <option key={m} value={m}>{m} ({n})</option>)}
+        </select>
+      </div>
+
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1 flex-wrap">
         {views.map(v=>(<button key={v.id} onClick={()=>setView(v.id)}
           className={`flex-1 py-2 text-xs rounded-md transition-colors min-w-[60px] ${view===v.id?'bg-white text-gray-800 font-medium shadow-sm':'text-gray-400'}`}>{v.label}</button>))}
@@ -232,6 +259,8 @@ export default function Analysis({ runs, factors, molds, boilers }) {
             tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.raw} (시편${gs(runs[c.dataIndex].id).length}개)`}}},
             scales:{y:{beginAtZero:true},x:{ticks:{font:{size:10},maxRotation:45}}}}}/></div></div>
       </div>)}
+
+      {view==='compare'&&<ConditionCompare key={moldSel} runs={runs} fixedMap={fixedMap} specsOf={gs} mold={moldSel} />}
 
       {/* 사진 갤러리 */}
       {view==='photos'&&(<div className="space-y-4">
