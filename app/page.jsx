@@ -5,6 +5,7 @@ import FactorManager from '@/components/FactorManager';
 import RunList from '@/components/RunList';
 import LotInput from '@/components/LotInput';
 import Analysis from '@/components/Analysis';
+import CriteriaGuide from '@/components/CriteriaGuide';
 
 const TABS = [
   { id: 'settings', label: '설정', icon: '⚙️' },
@@ -19,6 +20,7 @@ export default function Home() {
   const [selectedRunId, setSelectedRunId] = useState(null);
   const [runPage, setRunPage] = useState(1); // 실험목록 쪽 번호 (탭을 오가도 유지)
   const [analysisMold, setAnalysisMold] = useState('all'); // 분석 탭 금형 필터 (탭을 오가도 유지)
+  const [showGuide, setShowGuide] = useState(false); // 오른쪽 위 '판단기준' 창
 
   const [factors, setFactors] = useState([]);
   const [molds, setMolds] = useState([]);
@@ -44,9 +46,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <header className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-40">
+      <header className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-40 flex items-center justify-between gap-3">
         <h1 className="text-base font-semibold text-gray-800">🧪 발포 실험 트래커</h1>
+        <button onClick={() => setShowGuide(true)}
+          className="shrink-0 text-xs font-medium text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 rounded-full px-3 py-1">
+          📏 판단기준
+        </button>
       </header>
+      {showGuide && <CriteriaGuide onClose={() => setShowGuide(false)} />}
 
       <main className="max-w-2xl mx-auto p-4">
         {tab === 'settings' && (
