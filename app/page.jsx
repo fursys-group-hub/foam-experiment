@@ -39,6 +39,7 @@ export default function Home() {
   function openLot(runId) {
     setSelectedRunId(runId);
     setTab('lot');
+    window.scrollTo({ top: 0 }); // 긴 목록·순위표 아래쪽에서 눌러도 로트 화면은 맨 위부터
   }
 
   return (
@@ -69,7 +70,7 @@ export default function Home() {
         )}
         {tab === 'analysis' && (
           <Analysis runs={runs} factors={factors} molds={molds} boilers={boilers}
-            mold={analysisMold} onMoldChange={setAnalysisMold} />
+            mold={analysisMold} onMoldChange={setAnalysisMold} onOpenLot={openLot} />
         )}
       </main>
 

@@ -17,7 +17,7 @@ function specHasDefect(s){return Object.values(s.defect_severity||{}).some(v=>{c
 function specFillSum(s){return Object.values(s.defect_severity||{}).reduce((a,v)=>a+pz(v).fill,0);}
 function specHasSurface(s){return Object.values(s.defect_severity||{}).some(v=>pz(v).surface>0);}
 
-export default function Analysis({ runs: allRuns, factors, molds, boilers, mold = 'all', onMoldChange = () => {} }) {
+export default function Analysis({ runs: allRuns, factors, molds, boilers, mold = 'all', onMoldChange = () => {}, onOpenLot = null }) {
   const [specRows, setSpecRows] = useState([]);
   const [fixedMap, setFixedMap] = useState({});
   const [photoRows, setPhotoRows] = useState([]);
@@ -185,7 +185,7 @@ export default function Analysis({ runs: allRuns, factors, molds, boilers, mold 
             scales:{y:{beginAtZero:true},x:{ticks:{font:{size:10},maxRotation:45}}}}}/></div></div>
       </div>)}
 
-      {view==='compare'&&<ConditionCompare key={moldSel} runs={runs} fixedMap={fixedMap} specsOf={gs} mold={moldSel} />}
+      {view==='compare'&&<ConditionCompare key={moldSel} runs={runs} fixedMap={fixedMap} specsOf={gs} mold={moldSel} onOpenLot={onOpenLot} />}
 
       {/* 사진 갤러리 */}
       {view==='photos'&&(<div className="space-y-4">

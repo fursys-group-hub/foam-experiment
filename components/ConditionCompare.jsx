@@ -14,7 +14,7 @@ const ICON = {
 };
 
 // 같은 금형의 Run 들을 조건(실험변수 + 고정변수) 조합별로 비교하는 화면
-export default function ConditionCompare({ runs, fixedMap, specsOf, mold }) {
+export default function ConditionCompare({ runs, fixedMap, specsOf, mold, onOpenLot = null }) {
   const [groupSig, setGroupSig] = useState(null); // 비교할 실험 묶음 (null = 가장 최근 묶음)
 
   if (mold === 'all') {
@@ -57,6 +57,20 @@ export default function ConditionCompare({ runs, fixedMap, specsOf, mold }) {
   const hi = c.ranked[c.ranked.length - 1].avgFill;
   const g = gridLayout(c.factors, c.levelsOf);
   const find = cond => c.rows.find(r => Object.entries(cond).every(([k, v]) => r.cond[k] === v));
+  // 줄·칸을 누르면 그 Run 의 로트입력으로 이동 (같은 조건 Run 이 여러 개면 줄 끝 #번호를 골라 누른다)
+  const canOpen = ids => !!onOpenLot && ids.length === 1;
+  const openProps = ids => (canOpen(ids) ? {
+    role: 'button', tabIndex: 0, title: `Run #${ids[0]} 로트 열기`,
+    onClick: () => onOpenLot(ids[0]),
+    onKeyDown: e => { if (e.key === 'Enter') onOpenLot(ids[0]); },
+  } : {});
+  const runCell = ids => (
+    <td className="py-1.5 pl-2 text-right whitespace-nowrap text-purple-600">
+      {onOpenLot && ids.length > 1
+        ? ids.map(id => <button key={id} type="button" onClick={() => onOpenLot(id)} className="ml-1 hover:underline">#{id}</button>)
+        : <>#{ids.join(' #')}{onOpenLot && <span className="text-gray-300"> ›</span>}</>}
+    </td>
+  );
   const cellStyle = r => {
     if (!r || !r.n) return { background: '#f3f4f6', color: '#9ca3af' };
     if (r.rank === 1) return { background: '#bbf7d0', color: '#065f46', fontWeight: 600 };
@@ -142,7 +156,7 @@ export default function ConditionCompare({ runs, fixedMap, specsOf, mold }) {
 
       {g && (
         <div className="card">
-          <h3 className="text-xs text-gray-500 mb-3">조건 지도 (칸 = 평균 미충진, 초록 = 가장 낮음)</h3>
+          <h3 className="text-xs text-gray-500 mb-3">조건 지도 (칸 = 평균 미충진, 초록 = 가장 낮음{onOpenLot && ' · 칸을 누르면 로트로 이동'})</h3>
           <div className={`grid gap-4 ${g.split ? 'sm:grid-cols-2' : ''}`}>
             {(g.split ? c.levelsOf[g.split] : [null]).map(sv => (
               <div key={sv ?? 'all'}>
@@ -161,7 +175,8 @@ export default function ConditionCompare({ runs, fixedMap, specsOf, mold }) {
                         {c.levelsOf[g.col].map(cv => {
                           const r = find({ [g.row]: rv, [g.col]: cv, ...(g.split ? { [g.split]: sv } : {}) });
                           return (
-                            <td key={cv} className="text-center rounded-md py-2 tabular-nums" style={cellStyle(r)}>
+                            <td key={cv} style={cellStyle(r)} {...(r ? openProps(r.runIds) : {})}
+                              className={`text-center rounded-md py-2 tabular-nums ${r && canOpen(r.runIds) ? 'cursor-pointer hover:ring-2 hover:ring-purple-300' : ''}`}>
                               {!r ? '—' : r.n ? fmt(r.avgFill) : '결측'}
                             </td>
                           );
@@ -177,7 +192,7 @@ export default function ConditionCompare({ runs, fixedMap, specsOf, mold }) {
       )}
 
       <div className="card">
-        <h3 className="text-xs text-gray-500 mb-3">조건별 순위 (평균 미충진 낮은 순)</h3>
+        <h3 className="text-xs text-gray-500 mb-3">조건별 순위 (평균 미충진 낮은 순{onOpenLot && ' · 줄을 누르면 로트로 이동'})</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
@@ -187,11 +202,13 @@ export default function ConditionCompare({ runs, fixedMap, specsOf, mold }) {
                 <th className="py-1.5 text-right font-normal whitespace-nowrap">평균 미충진</th>
                 <th className="py-1.5 text-right font-normal">표면불량</th>
                 <th className="py-1.5 text-right font-normal">시편</th>
+                <th className="py-1.5 pl-2 text-right font-normal">Run</th>
               </tr>
             </thead>
             <tbody>
               {rankRows.map(r => r.baseline ? (
-                <tr key={r.key} className="border-b border-gray-50 bg-blue-50 text-blue-900">
+                <tr key={r.key} {...openProps([base.runId])}
+                  className={`border-b border-gray-50 bg-blue-50 text-blue-900 ${onOpenLot ? 'cursor-pointer hover:bg-blue-100' : ''}`}>
                   <td className="py-1.5 pr-2 font-semibold whitespace-nowrap">기준</td>
                   <td className="py-1.5 pr-2" colSpan={c.factors.length}>
                     대조군 #{base.runId}{base.date && ` · ${base.date}`}
@@ -199,21 +216,26 @@ export default function ConditionCompare({ runs, fixedMap, specsOf, mold }) {
                   <td className="py-1.5 text-right tabular-nums font-medium">{fmt(base.avgFill)}</td>
                   <td className="py-1.5 text-right tabular-nums">{base.avgSurf ? `${Math.round(base.avgSurf * 100)}%` : '-'}</td>
                   <td className="py-1.5 text-right tabular-nums">{base.n}</td>
+                  {runCell([base.runId])}
                 </tr>
               ) : (
-                <tr key={r.key} className={`border-b border-gray-50 ${r.rank === 1 ? 'bg-green-50' : ''}`}>
+                <tr key={r.key} {...openProps(r.runIds)}
+                  className={`border-b border-gray-50 ${r.rank === 1 ? 'bg-green-50' : ''} ${canOpen(r.runIds) ? `cursor-pointer ${r.rank === 1 ? 'hover:bg-green-100' : 'hover:bg-gray-50'}` : ''}`}>
                   <td className="py-1.5 pr-2 font-semibold whitespace-nowrap">{r.rank === 1 ? '🏆 1' : r.rank}</td>
                   {c.factors.map(f => <td key={f} className="py-1.5 pr-2">{r.cond[f]}</td>)}
                   <td className="py-1.5 text-right tabular-nums font-medium">{fmt(r.avgFill)}</td>
                   <td className="py-1.5 text-right tabular-nums text-blue-500">{r.avgSurf ? `${Math.round(r.avgSurf * 100)}%` : '-'}</td>
                   <td className="py-1.5 text-right tabular-nums text-gray-400">{r.n}</td>
+                  {runCell(r.runIds)}
                 </tr>
               ))}
               {c.missing.map(r => (
-                <tr key={r.key} className="text-gray-300">
+                <tr key={r.key} {...openProps(r.runIds)}
+                  className={`text-gray-300 ${canOpen(r.runIds) ? 'cursor-pointer hover:bg-gray-50' : ''}`}>
                   <td className="py-1.5 pr-2">-</td>
                   {c.factors.map(f => <td key={f} className="py-1.5 pr-2">{r.cond[f]}</td>)}
                   <td className="py-1.5 text-right" colSpan={3}>결측(시편 없음)</td>
+                  {runCell(r.runIds)}
                 </tr>
               ))}
             </tbody>
