@@ -6,6 +6,7 @@ import {
 } from 'chart.js';
 import { Bar, Scatter } from 'react-chartjs-2';
 import ConditionCompare from '@/components/ConditionCompare';
+import AnovaView from '@/components/AnovaView';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -54,7 +55,7 @@ export default function Analysis({ runs: allRuns, factors, molds, boilers, mold 
   function changeMold(m) {
     onMoldChange(m);
     setZoneRunId('all');
-    if (m !== 'all') setView('compare'); // 금형을 고르면 조건 비교 결과부터 보여준다
+    if (m !== 'all' && view !== 'anova') setView('compare'); // 금형을 고르면 조건 비교 결과부터 (분산분석을 보던 중이면 그대로)
   }
 
   function gs(rid){return allSpecs.filter(s=>s.run_id===rid);}
@@ -62,7 +63,7 @@ export default function Analysis({ runs: allRuns, factors, molds, boilers, mold 
   function gfs(run){return gs(run.id).reduce((a,s)=>a+specFillSum(s),0);}
   function gsc(run){return gs(run.id).filter(s=>specHasSurface(s)).length;}
 
-  const views = [{id:'history',label:'히스토리'},{id:'scatter',label:'산포도'},{id:'zone',label:'구역분석'},{id:'factor',label:'인자비교'},{id:'compare',label:'조건비교'},{id:'photos',label:'사진'}];
+  const views = [{id:'history',label:'히스토리'},{id:'scatter',label:'산포도'},{id:'zone',label:'구역분석'},{id:'factor',label:'인자비교'},{id:'compare',label:'조건비교'},{id:'anova',label:'분산분석'},{id:'photos',label:'사진'}];
 
   if(loading) return <div className="text-center py-12 text-gray-400 text-sm">로딩중...</div>;
 
@@ -186,6 +187,7 @@ export default function Analysis({ runs: allRuns, factors, molds, boilers, mold 
       </div>)}
 
       {view==='compare'&&<ConditionCompare key={moldSel} runs={runs} fixedMap={fixedMap} specsOf={gs} mold={moldSel} onOpenLot={onOpenLot} />}
+      {view==='anova'&&<AnovaView key={moldSel} runs={runs} fixedMap={fixedMap} specsOf={gs} mold={moldSel} />}
 
       {/* 사진 갤러리 */}
       {view==='photos'&&(<div className="space-y-4">
